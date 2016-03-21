@@ -525,4 +525,177 @@ Volley 没有提供方法设置一个请求的 Cookie 和优先级。也许将�
         }
     }
 
-这段代码可能比较长，但是逻辑还是很清楚的。从缓存的请求中获取请求，判断本地缓存的http是否存在、过期，根据判断的状态来决定是将请求放到网络请求队列中，还是直接从本地缓存直接获取数据。代码里面有几个mrak的地方，我们过会再看，接下来我们看看NetworkDispatcher
+这段代码可能比较长，但是逻辑还是很清楚的。从缓存的请求中获取请求，判断本地缓存的http是否存在、过期，根据判断的状态来决定是将请求放到网络请求队列中，还是直接从本地缓存直接获取数据。代码里面有几个mrak的地方，我们过会再看，接下来我们看看NetworkDispatcher.run()
+
+	@Override
+    public void run() {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+		// 这是死循环
+        while (true) {
+            long startTimeMs = SystemClock.elapsedRealtime();
+            Request<?> request;
+            try {
+                // Take a request from the queue.
+				// 请求队列中获取请求
+                request = mQueue.take();
+            } catch (InterruptedException e) {
+                // We may have been interrupted because it was time to quit.
+                if (mQuit) {
+                    return;
+                }
+                continue;
+            }
+
+            try {
+                request.addMarker("network-queue-take");
+
+                // If the request was cancelled already, do not perform the
+                // network request.
+				// 如果请求canceled，结束请求
+                if (request.isCanceled()) {
+                    request.finish("network-discard-cancelled");
+                    continue;
+                }
+
+                addTrafficStatsTag(request);
+
+                // Perform the network request.
+				// 通过 mNetwork.performRequest 请求网络，并将分析后的结果封装到 NetworkResponse 中返回
+				// 这里面包含了 statusCode , data , headers , notModified ----mark
+                NetworkResponse networkResponse = mNetwork.performRequest(request);
+                request.addMarker("network-http-complete");
+
+                // If the server returned 304 AND we delivered a response already,
+                // we're done -- don't deliver a second identical response.
+                if (networkResponse.notModified && request.hasHadResponseDelivered()) {
+                    request.finish("not-modified");
+                    continue;
+                }
+
+                // Parse the response here on the worker thread.
+				// 这里解析网络请求获取到的 NetworkResponse 对象，并根据我们使用的不同的 Request 进行解析
+                Response<?> response = request.parseNetworkResponse(networkResponse);
+                request.addMarker("network-parse-complete");
+
+                // Write to cache if applicable.
+                // TODO: Only update cache metadata instead of entire record for 304s.
+				// 允许缓存的话，将请求缓存起来
+                if (request.shouldCache() && response.cacheEntry != null) {
+                    mCache.put(request.getCacheKey(), response.cacheEntry);
+                    request.addMarker("network-cache-written");
+                }
+
+                // Post the response back.
+				// 标记请求已经投递
+                request.markDelivered();
+				// 将结果投递带我们的Listener----mark
+                mDelivery.postResponse(request, response);
+            } catch (VolleyError volleyError) {
+                volleyError.setNetworkTimeMs(SystemClock.elapsedRealtime() - startTimeMs);
+                parseAndDeliverNetworkError(request, volleyError);
+            } catch (Exception e) {
+                VolleyLog.e(e, "Unhandled exception %s", e.toString());
+                VolleyError volleyError = new VolleyError(e);
+                volleyError.setNetworkTimeMs(SystemClock.elapsedRealtime() - startTimeMs);
+                mDelivery.postError(request, volleyError);
+            }
+        }
+    }
+
+分析到这里，基本上整个流程走通了，但是还有部分逻辑上的实现细节还没有理清楚，前面有几个地方的注释都打上了 mark 标记，接下来我们就看看这些 mark 的地方的细节。
+
+CacheDispatcher.run
+	
+	// 将数据解析成Response----mark
+    Response<?> response = request.parseNetworkResponse(new NetworkResponse(entry.data, entry.responseHeaders));
+
+这里将数据解析成 Response，注意这里是本地的缓存；那么我们继续跟进 request.parseNetworkResponse 方法的代码，但是需要注意的是 Request 是一个 interface , 我们所使用的都是它的实现类，我们先来看看 JsonObjectRequest 中是怎么实现 parseNetworkResponse() 方法的。
+
+	@Override
+    protected Response<JSONObject> parseNetworkResponse(NetworkResponse response) {
+        try {
+            String jsonString = new String(response.data,
+				HttpHeaderParser.parseCharset(response.headers, PROTOCOL_CHARSET));
+            return Response.success(
+				new JSONObject(jsonString),HttpHeaderParser.parseCacheHeaders(response));
+        } catch (UnsupportedEncodingException e) {
+            return Response.error(new ParseError(e));
+        } catch (JSONException je) {
+            return Response.error(new ParseError(je));
+        }
+    }
+
+首先将 byte[] response.data 按照 http 头信息中的 charset 构成一个 String，然后返回 Response 对象，而 Response.success() 参数是我们 new 的 JSONObject，还记得在使用 JsonObjectRequest 的时候 onResponse 中返回给我们的是 JSONObject ，继续看看 Resopnse.success 方法代码
+
+	/** Returns a successful response containing the parsed result. */
+    public static <T> Response<T> success(T result, Cache.Entry cacheEntry) {
+        return new Response<T>(result, cacheEntry);
+    }
+
+用我们传进来的两个参数构造了一个 Response 对象，看看 Response 的构造方法
+
+	private Response(T result, Cache.Entry cacheEntry) {
+        this.result = result;
+        this.cacheEntry = cacheEntry;
+        this.error = null;
+    }
+
+    private Response(VolleyError error) {
+        this.result = null;
+        this.cacheEntry = null;
+        this.error = error;
+    }
+
+这里对传进去的数据做了简单的保存，那我们怎么使用保存的数据呢？Response 有 Listener 和 ErrorListener 接口
+
+	/** Callback interface for delivering parsed responses. */
+    public interface Listener<T> {
+        /** Called when a response is received. */
+        public void onResponse(T response);
+    }
+
+    /** Callback interface for delivering error responses. */
+    public interface ErrorListener {
+        /**
+         * Callback method that an error has been occurred with the
+         * provided error code and optional user-readable message.
+         */
+        public void onErrorResponse(VolleyError error);
+    }
+
+至于什么时候回调接口，我们看一下 mark 的地方
+
+	//　直接回调到我们设置的listener----mark
+    mDelivery.postResponse(request, response);
+
+ResponseDelivery 是一个 interface，我看看实现类--ExecutorDelivery
+
+	/**
+     * Creates a new response delivery interface.
+     * @param handler {@link Handler} to post responses on
+     */
+    public ExecutorDelivery(final Handler handler) {
+        // Make an Executor that just wraps the handler.
+        mResponsePoster = new Executor() {
+            @Override
+            public void execute(Runnable command) {
+                handler.post(command);
+            }
+        };
+    }
+
+只传入了一个 handler 参数，这个 handler 是在 RequestQueue 的一个构造器里面初始化的，之前的代码有贴出来过，这个 handler 是通过 new Handler(Looper.getMainLooper())) 初始化的，handler 被指定到了 UI 线程上的 Looper , 回到 ExecutorDelivery 的构造器，new 了一个 Executor，并重写了 execute 方法，这个方法里面用 handler post 了一个 Runnable。我们接着看 postResponse 的细节
+
+	@Override
+    public void postResponse(Request<?> request, Response<?> response) {
+        postResponse(request, response, null);
+    }
+
+    @Override
+    public void postResponse(Request<?> request, Response<?> response, Runnable runnable) {
+        request.markDelivered();
+        request.addMarker("post-response");
+        mResponsePoster.execute(new ResponseDeliveryRunnable(request, response, runnable));
+    }
+
+
