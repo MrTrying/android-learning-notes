@@ -698,4 +698,79 @@ ResponseDelivery 是一个 interface，我看看实现类--ExecutorDelivery
         mResponsePoster.execute(new ResponseDeliveryRunnable(request, response, runnable));
     }
 
+标记了 request 并且 post 了一个 new ResponseDeliveryRunnable() , ResponseDeliveryRunnable 是 ExecutorDelivery 的一个内部类，来看看它的代码
+
+	private class ResponseDeliveryRunnable implements Runnable {
+	    private final Request mRequest;
+	    private final Response mResponse;
+	    private final Runnable mRunnable;
+	
+	    public ResponseDeliveryRunnable(Request request, Response response, Runnable runnable) {
+	        mRequest = request;
+	        mResponse = response;
+	        mRunnable = runnable;
+	    }
+	
+	    @SuppressWarnings("unchecked")
+	    @Override
+	    public void run() {
+	        // If this request has canceled, finish it and don't deliver.
+	        if (mRequest.isCanceled()) {
+	            mRequest.finish("canceled-at-delivery");
+	            return;
+	        }
+	
+	        // Deliver a normal response or error, depending.
+	        if (mResponse.isSuccess()) {
+	            mRequest.deliverResponse(mResponse.result);
+	        } else {
+	            mRequest.deliverError(mResponse.error);
+	        }
+	
+	        // If this is an intermediate response, add a marker, otherwise we're done
+	        // and the request can be finished.
+	        if (mResponse.intermediate) {
+	            mRequest.addMarker("intermediate-response");
+	        } else {
+	            mRequest.finish("done");
+	        }
+	
+	        // If we have been provided a post-delivery runnable, run it.
+	        if (mRunnable != null) {
+	            mRunnable.run();
+	        }
+   		}
+	}
+
+实现 Runnable 接口，有三个参数，一路回溯，我们会发现 runnable 为 null，而 request 和 response 这两个参数是从 mDelivery.postResponse(request, response); 这句传递过来的，也就是 CacheDispatcher 传递过来的。request 是我们从 cache 队列中获得的，response 则是 request.parseNetworkResponse() 返回的。现在来源清楚了我们继续分析
+
+	// Deliver a normal response or error, depending.
+    if (mResponse.isSuccess()) {
+        mRequest.deliverResponse(mResponse.result);
+    } else {
+        mRequest.deliverError(mResponse.error);
+    }
+
+这里是在UI线程中执行了，利用我们的request.deliverResponse
+
+	@Override
+	protected void deliverResponse(T response) {
+   		mListener.onResponse(response);
+	}
+
+现在我们去看看，这个 mLIstener 是不是我们传入的那个 listener
+
+	public JsonRequest(String url, String requestBody, Listener<T> listener,
+        ErrorListener errorListener) {
+    this(Method.DEPRECATED_GET_OR_POST, url, requestBody, listener, errorListener);
+	}
+	
+	public JsonRequest(int method, String url, String requestBody, Listener<T> listener,
+	        ErrorListener errorListener) {
+	    super(method, url, errorListener);
+	    mListener = listener;
+	    mRequestBody = requestBody;
+	}
+
+到这里为止，一个请求从加入到缓存队列，然后从缓存队列加入到请求队列，判断时候有对应的本地缓存，包装请求结果，然后各种调用，到最后回调到我们的 lisnter 都已经分析清楚了，现在还剩下网络请求部分了，我们继续来看其他 mark 的地方
 
