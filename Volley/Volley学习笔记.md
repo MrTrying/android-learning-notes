@@ -774,3 +774,269 @@ ResponseDelivery 是一个 interface，我看看实现类--ExecutorDelivery
 
 到这里为止，一个请求从加入到缓存队列，然后从缓存队列加入到请求队列，判断时候有对应的本地缓存，包装请求结果，然后各种调用，到最后回调到我们的 lisnter 都已经分析清楚了，现在还剩下网络请求部分了，我们继续来看其他 mark 的地方
 
+	// 这里将结果回调并且又将请求放到请求队列中----mark
+	// Post the intermediate response back to the user and have
+	// the delivery then forward the request along to the network.
+	mDelivery.postResponse(request, response, new Runnable() {
+		@Override
+		public void run() {
+		    try {
+		        mNetworkQueue.put(request);
+		    } catch (InterruptedException e) {
+		        // Not much we can do about this.
+		    }
+		}
+	});
+
+这里执行了那个三个构造的 ResponseDeliveryRunnable ， mRunnable 肯定不为 null 所以 mRunnable.run() 中的代码得以执行,也就是说我们重新将 request 加入到了请求队列中,继续看mark的地方,NetworkDispatcher.run 中不断的从 mNetworkQueue 中获取一个 request 并且执行
+
+	// Perform the network request.
+	// 通过NetWork.performRequest来真正的请求网络
+	// 并将分析后的结果封装到networkResponse中返回
+	// 这里面包含了statusCode，data，headers，notModified
+	// ----mark
+	NetworkResponse networkResponse = mNetwork.performRequest(request);
+	request.addMarker("network-http-complete");
+
+
+NetWork是一个接口，我们来看它的实现类——BasicNetwork，也就是我们在刚开始看到new的那个，BasicNetwork.performRequest
+
+	@Override
+	public NetworkResponse performRequest(Request<?> request) throws VolleyError {
+	    long requestStart = SystemClock.elapsedRealtime();
+	    while (true) {
+	        HttpResponse httpResponse = null;
+	        byte[] responseContents = null;
+	        Map<String, String> responseHeaders = new HashMap<String, String>();
+	        try {
+	            // Gather headers.
+	            Map<String, String> headers = new HashMap<String, String>();
+	            // 从Cache中获取header，并添加到Map中
+	            addCacheHeaders(headers, request.getCacheEntry());
+	            // 执行网络请求
+	            httpResponse = mHttpStack.performRequest(request, headers);
+	            // 获取状态
+	            StatusLine statusLine = httpResponse.getStatusLine();
+	            int statusCode = statusLine.getStatusCode();
+	
+	            // 将header放到上面定义的responseHeaders中
+	            responseHeaders = convertHeaders(httpResponse.getAllHeaders());
+	            // Handle cache validation.
+	            // 内容没有修改
+	            if (statusCode == HttpStatus.SC_NOT_MODIFIED) {
+	               // 这里构造了NetworkResponse
+	                return new NetworkResponse(HttpStatus.SC_NOT_MODIFIED,
+	                        request.getCacheEntry().data, responseHeaders, true);
+	            }
+	            // 将返回的内容转化为byte数组
+	            responseContents = entityToBytes(httpResponse.getEntity());
+	            // if the request is slow, log it.
+	            // 标记访问慢的请求
+	            long requestLifetime = SystemClock.elapsedRealtime() - requestStart;
+	            logSlowRequests(requestLifetime, request, responseContents, statusLine);
+	
+	            if (statusCode != HttpStatus.SC_OK && statusCode != HttpStatus.SC_NO_CONTENT) {
+	                throw new IOException();
+	            }
+	            // 构造NetworkResponse并返回
+	            // 这里面包含状态吗， 返回的内容， header
+	            return new NetworkResponse(statusCode, responseContents, responseHeaders, false);
+	        } catch (SocketTimeoutException e) {
+	            attemptRetryOnException("socket", request, new TimeoutError());
+	        } catch (ConnectTimeoutException e) {
+	            attemptRetryOnException("connection", request, new TimeoutError());
+	        } catch (MalformedURLException e) {
+	            throw new RuntimeException("Bad URL " + request.getUrl(), e);
+	        } catch (IOException e) {
+	            int statusCode = 0;
+	            NetworkResponse networkResponse = null;
+	            if (httpResponse != null) {
+	                statusCode = httpResponse.getStatusLine().getStatusCode();
+	            } else {
+	                throw new NoConnectionError(e);
+	            }
+	            VolleyLog.e("Unexpected response code %d for %s", statusCode, request.getUrl());
+	            if (responseContents != null) {
+	                networkResponse = new NetworkResponse(statusCode, responseContents,
+	                        responseHeaders, false);
+	                if (statusCode == HttpStatus.SC_UNAUTHORIZED ||
+	                        statusCode == HttpStatus.SC_FORBIDDEN) {
+	                    attemptRetryOnException("auth",
+	                            request, new AuthFailureError(networkResponse));
+	                } else {
+	                    // TODO: Only throw ServerError for 5xx status codes.
+	                    throw new ServerError(networkResponse);
+	                }
+	            } else {
+	                throw new NetworkError(networkResponse);
+	            }
+	        }
+	    }
+	}
+基本的流程看我写的注释，重要的看这里的代码，
+
+	...
+	httpResponse = mHttpStack.performRequest(request, headers);
+	...
+还记得HttpStack是什么吗？来回忆一下吧，Volley.newRequestQueue中
+
+	...
+	if (stack == null) {
+	    if (Build.VERSION.SDK_INT >= 9) {
+	        stack = new HurlStack();
+	    } else {
+	        // Prior to Gingerbread, HttpUrlConnection was unreliable.
+	        // See: http://android-developers.blogspot.com/2011/09/androids-http-clients.html
+	        stack = new HttpClientStack(AndroidHttpClient.newInstance(userAgent));
+	    }
+	}
+	...
+通过判断SDK的版本来选择使用HttpUrlConnection还是HttpClient，我们来看看HttpClientStack也就是使用HttpClient怎么实现的，
+
+	@Override
+	public HttpResponse performRequest(Request<?> request, Map<String, String> additionalHeaders)
+	        throws IOException, AuthFailureError {
+	    // 构造请求方式
+	    HttpUriRequest httpRequest = createHttpRequest(request, additionalHeaders);
+	    // 添加从缓存中获取的header
+	    addHeaders(httpRequest, additionalHeaders);
+	    // 添加我们重写getHeaders中自定义的header
+	    addHeaders(httpRequest, request.getHeaders());
+	    // nothing
+	    onPrepareRequest(httpRequest);
+	    // 获取我们重写的getParams方法中的参数
+	    HttpParams httpParams = httpRequest.getParams();
+	    int timeoutMs = request.getTimeoutMs();
+	    // TODO: Reevaluate this connection timeout based on more wide-scale
+	    // data collection and possibly different for wifi vs. 3G.
+	    HttpConnectionParams.setConnectionTimeout(httpParams, 5000);
+	    HttpConnectionParams.setSoTimeout(httpParams, timeoutMs);
+	    // 执行网络请求并返回结果
+	    return mClient.execute(httpRequest);
+	}
+第一行代码createHttpRequest其实就是根据我们使用的请求方式(GET,POST,PUT…)来构造不同的请求类(HttpGet, HttpPost, HttpPut)，接下来是想请求中添加header，添加了两次，第一次是从缓存中获取的header，第二次获取的我们重写getHeaders方法中返回的那个map，接下来onPrepareRequest是一个空方法，继续代码，是调用我们重写getParams获取参数，最后执行HttpClient.execute(HttpUriRequest request)执行网络请求，并返回结果。 
+这样我们终于把Volley整个的请求过程走通了，但是还有一个问题？ 我们目前为止看到的RequestQueue和CacheQueue都是空的，并没有往里添加request，那request是什么时候添加的呢？还记得我们怎么往volley添加一个请求吗？
+
+	mRequestQueue.add(request);
+
+我们来看看这个add方法，
+	
+	public Request add(Request request) {
+	    // Tag the request as belonging to this queue and add it to the set of current requests.
+	    // 标记这个请求放入了请求队列中
+	    request.setRequestQueue(this);
+	    synchronized (mCurrentRequests) {
+	        mCurrentRequests.add(request);
+	    }
+	
+	    // Process requests in the order they are added.
+	    request.setSequence(getSequenceNumber());
+	    request.addMarker("add-to-queue");
+	
+	    // If the request is uncacheable, skip the cache queue and go straight to the network.
+	    // 如果请求允许缓存，则添加到缓存队列中
+	    // 并且返回
+	    if (!request.shouldCache()) {
+	        mNetworkQueue.add(request);
+	        return request;
+	    }
+	
+	    // Insert request into stage if there's already a request with the same cache key in flight.
+	    synchronized (mWaitingRequests) {
+	        String cacheKey = request.getCacheKey();
+	        // 如果有相同的请求正在等待
+	        // 将这个请求放到这个具有相同cacheKey的队列中
+	        // 这个cacheKey其实就是我们访问的url，
+	        // 也就是具有相同url的请求我们放一块
+	        if (mWaitingRequests.containsKey(cacheKey)) {
+	            // There is already a request in flight. Queue up.
+	            Queue<Request> stagedRequests = mWaitingRequests.get(cacheKey);
+	            if (stagedRequests == null) {
+	                stagedRequests = new LinkedList<Request>();
+	            }
+	            stagedRequests.add(request);
+	            mWaitingRequests.put(cacheKey, stagedRequests);
+	            if (VolleyLog.DEBUG) {
+	                VolleyLog.v("Request for cacheKey=%s is in flight, putting on hold.", cacheKey);
+	            }
+	        } else {
+	            // Insert 'null' queue for this cacheKey, indicating there is now a request in
+	            // flight.
+	            // 如果没有，则添加一个null
+	            // 并放到cache队列中
+	            mWaitingRequests.put(cacheKey, null);
+	            mCacheQueue.add(request);
+	        }
+	        return request;
+	    }
+	}
+
+为什么要这么麻烦呢？ 好几个队列，有点晕了，我们来看看RequestQueue的finish方法，这个方式是在请求结束后调用的，上面的代码中，很多地方地方都调用了Request.finish(tag)方法，
+	
+	void finish(final String tag) {
+	    if (mRequestQueue != null) {
+	        mRequestQueue.finish(this);
+	    }
+	    if (MarkerLog.ENABLED) {
+	        final long threadId = Thread.currentThread().getId();
+	        if (Looper.myLooper() != Looper.getMainLooper()) {
+	            // If we finish marking off of the main thread, we need to
+	            // actually do it on the main thread to ensure correct ordering.
+	            Handler mainThread = new Handler(Looper.getMainLooper());
+	            mainThread.post(new Runnable() {
+	                @Override
+	                public void run() {
+	                    mEventLog.add(tag, threadId);
+	                    mEventLog.finish(this.toString());
+	                }
+	            });
+	            return;
+	        }
+	
+	        mEventLog.add(tag, threadId);
+	        mEventLog.finish(this.toString());
+	    } else {
+	        long requestTime = SystemClock.elapsedRealtime() - mRequestBirthTime;
+	        if (requestTime >= SLOW_REQUEST_THRESHOLD_MS) {
+	            VolleyLog.d("%d ms: %s", requestTime, this.toString());
+	        }
+	    }
+	}
+
+这里面调用了RequestQueue的finish方法，并将当前request对象传递过去，
+
+	void finish(Request request) {
+	    // Remove from the set of requests currently being processed.
+	    // 从当前将要执行的request队列中移除
+	    synchronized (mCurrentRequests) {
+	        mCurrentRequests.remove(request);
+	    }
+	
+	    if (request.shouldCache()) {
+	        synchronized (mWaitingRequests) {
+	            String cacheKey = request.getCacheKey;
+	            Queue<Request> waitingRequests = mWaitingRequests.remove(cacheKey);
+	            if (waitingRequests != null) {
+	                if (VolleyLog.DEBUG) {
+	                    VolleyLog.v("Releasing %d waiting requests for cacheKey=%s.",
+	                            waitingRequests.size(), cacheKey);
+	                }
+	                // Process all queued up requests. They won't be considered as in flight, but
+	                // that's not a problem as the cache has been primed by 'request'.
+	                mCacheQueue.addAll(waitingRequests);
+	            }
+	        }
+	    }
+	}
+
+这里面将request从mCurrentRequests中移除，并且判断waitingRequests是否含有该url的请求，如果有，则移除，并且将移除的队列全部放到mCacheQueue,为什么要这么干？还记得我们在CacheDispatcher中那一系列判断吗？如果该请求的url已经缓存很有可能直接将结果回调了。这种做法解决了一个很重要的问题，我们连续访问两次同一个url，真正去访问网络的其实就一个，第二次直接从缓存中获取结果了。 
+ok，到目前为止Volley的过程我们就分析完毕了。
+
+## 四、参考文献
+
+[http://www.kancloud.cn/qibin0506/android-src/117690](http://www.kancloud.cn/qibin0506/android-src/117690 "http://www.kancloud.cn/qibin0506/android-src/117690")
+[http://www.jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0720/3204.html](http://www.jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0720/3204.html "http://www.jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0720/3204.html")
+[http://www.jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0526/2934.html](http://www.jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0526/2934.html "http://www.jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0526/2934.html")
+
+
+
