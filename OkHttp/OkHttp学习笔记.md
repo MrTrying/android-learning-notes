@@ -67,10 +67,34 @@ GRADLE
 > - Call.enqueue需要设置回调，则是异步请求；如果需要同步请求可以使用Call.execute()方法，返回一个Response对象，cancel()方法取消一个请求。
 > - onResponse的回调参数是response，我们可以通过response.body().string()获取返回的字符串，或者通过response.body().bytes()获取二进制字节数组，或者通过response.body().byteStream()获取inputstream，这里支持大文件下载我们可以通过IO写文件，不过也说明onResponse执行线程不是UI线程，如果需要操作控件，需要handler配合。
 
-
 ### (二) Http Post
 
+Post请求和Get请求的使用基本一致，只是在Request的构造的时候有些不同；需要使用 FormEncodeBuilder 携带键值对参数
+
+	OkHttpClient mOkHttpClient = new OkHttpClient();
+	FormEncodingBuilder params = new FormEncodingBuilder();
+	params.add("ket", "value");
+	Request request = new Request.Builder()
+			.url(url)
+			.post(params.build())
+			.build();
+	Call call = mOkHttpClient.newCall(request);
+	call.enqueue(new Callback() {
+		
+		@Override
+		public void onResponse(Response arg0) throws IOException {
+			
+		}
+		
+		@Override
+		public void onFailure(Request arg0, IOException arg1) {
+			
+		}
+	});
+
 ### (三) 基于Http上传文件
+
+
 
 
 ## 三、源码分析
