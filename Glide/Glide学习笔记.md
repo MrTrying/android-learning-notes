@@ -42,6 +42,7 @@ Glide 也支持 Maven 项目形式：
 
 （二）基本使用
 
+
 Glide的一个完整的请求至少需要三个参数，代码如下：
 
 	String url = "http://img1.dzwww.com:8080/tupian_pl/20150813/16/7858995348613407436.jpg";
@@ -64,7 +65,20 @@ Glide的一个完整的请求至少需要三个参数，代码如下：
 		.error(R.drawable.error_image)//图片加载失败后，显示的图片
 		.into(imageView);
 
-> 这里需要注意一点，
+> 这里需要注意一点，placeholder() 和 error() 的参数都是只支持 int 和 Drawable 类型的参数，这种设计应该是考虑到使用本地图片比网络图片更加合适做占位图。
+
+说道 UI Glide 的动画效果让图片加载变得更加的平滑，crossFade() 方法强制开启 Glide 默认的图片淡出淡入动画，当前版本3.7.0是默认开启的。crossFade() 还有一个重载方法 crossFade(int duration)。可以控制动画的持续时间，单位ms。动画默认的持续时间是300ms。既然可以添加动画，那肯定就可以设置没有任何淡出淡入效果，调用 dontAnimate()
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## 三、源码分析
