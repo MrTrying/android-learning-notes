@@ -71,6 +71,33 @@ Glide的一个完整的请求至少需要三个参数，代码如下：
 
 >**注：这里需要注意一点，placeholder() 和 error() 的参数都是只支持 int 和 Drawable 类型的参数，这种设计应该是考虑到使用本地图片比网络图片更加合适做占位图。**
 
+#### 缩略图 ####
+
+Glide 的缩略图功能在这里不得不说，和占位图略有不同，占位图必须使用资源文件才行，而缩略图是动态的占位图可以从网络中加载。缩略图会在世纪请求加载完成或者处理完之后才显示。在原始图片到达之后，缩略图不会取代原始图片，只会被抹除。
+
+Glide 为缩略图提供了2种不同的加载方式，比较简单的方式是调用 thumbnail() 方法，参数是 float 类型，作为其倍数大小。例如，你传入 0.2f 作为参数，Glide 将会显示原始图片的20%的大小，如果原图是 1000x1000 的尺寸，那么缩略图将会是 200x200 的尺寸。为缩略图明显比原图小得多，所以我们需要确保 ImageView 的 ScaleType 设置的正确。
+
+	Glide.with( context )
+		.load( url )
+		.thumbnail( 0.2f )
+		.into( imageView );
+
+> **注：应用于请求的设置也将应用于缩略图。**
+
+使用 thumbnail() 方法来设置是简单粗暴的，但是如果缩略图需要通过网络加载相同的全尺寸图片，就不会很快的显示了。所以 Glide 提供了另一种防止去加载缩略图，先看代码
+
+	private void loadImageThumbnailRequest(){
+		// setup Glide request without the into() method
+		DrawableRequestBuilder<String> thumbnailRequest = Glide.with( context ).load( url );
+		// pass the request as a a parameter to the thumbnail request
+		Glide.with( context )
+			.load( url )
+			.thumbnail( thumbnailRequest )
+			.into( imageView );
+	}
+
+与第一种方式不同的是，这里的第一个缩略图请求是完全独立于度二个原始请求的。该缩略图可以是不同的资源图片，同时也可以对缩略图做不同的转换，等等...
+
 #### 动画开关 ####
 
 动画效果可以让图片加载变得更加的平滑，crossFade() 方法强制开启 Glide 默认的图片淡出淡入动画，当前版本3.7.0是默认开启的。crossFade() 还有一个重载方法 crossFade(int duration)。可以控制动画的持续时间，单位ms。动画默认的持续时间是300ms。既然可以添加动画，那肯定就可以设置没有任何淡出淡入效果，调用 dontAnimate()
