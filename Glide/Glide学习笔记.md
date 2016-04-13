@@ -170,12 +170,12 @@ Glide 为缩略图提供了2种不同的加载方式，比较简单的方式是�
 	Glide.with( context )
 		.load( highPriorityImageUrl )
 		.priority (Priority.High )
-		into( imageView );
+		.into( imageView );
 	//设置 LOW 优先级
 	Glide.with( context )
 		.load( lowPriorityImageUrl )
 		.priority( Priority.High )
-		into( imageView );
+		.into( imageView );
 
 > - Priority.LOW
 > - Priority.NORMAL
@@ -183,6 +183,42 @@ Glide 为缩略图提供了2种不同的加载方式，比较简单的方式是�
 > - Priority.IMMEDIAT
 >
 > **这里有一点需要注意，优先级并不是完全严格遵守的。Glide 将会用他们作为一个准则，尽可能的处理这些请求，但是不能保证所有的图片都会按照所有要求的顺序加载。**
+
+#### 显示 Gif 和 Video ####
+
+显示 GIf 对于 Glide 来说一个比较特别的功能（至少 Picasso 暂时还不行）而且使用起来非常简单
+
+	String gifUrl = "http://i2.mhimg.com/M00/0E/AE/CgAAilTPWJ2Aa_EIACcMxiZi5xE299.gif";
+	Glide.with( context )
+		.load( gifUrl )
+		.placeholder（ R.drawable.default ）
+		.error( R.drawable.error )
+		.into( imageView );
+
+这段代码还有点问题，如果加载的不是一张 gif 图的话，是没有办法显示的。
+
+	Glide.with( context )
+		.load( gifUrl )
+		.asGif()
+		.error( R.drawable.error )
+		.into( imageView );
+
+做以上修改，如果图片类型不是 Gif 图的话就会当作 load 失败来处理，因此 error() 会被回调。即使这个url的图片是好的，也是不会显示的。当然，如果你想显示 Gif 但只是向现实静态的图片你就可以这么做
+
+	Glide.with( context )
+		.load( gifUrl )
+		.asBitmap()
+		.error( R.drawable.error )
+		.into( imageView );
+
+仅仅是显示 Gif 的第一帧图像，这样就可以保证图片的正常显示了。
+
+还有一个神奇的功能，Glide 还能显示视频！But...只能够显示手机本地的视频，要是向现实网络上的视频的话，还是另寻他法吧！
+
+	String filePath = "/storrage/emulated/0/Pictures/video.mp4";
+	Glide.with( context )
+		.load( Uri.fromFile( new File( filePath ) ) )
+		.into( imageView );
 
 
 
