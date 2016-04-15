@@ -317,7 +317,7 @@ Volley 没有提供方法设置一个请求的 Cookie 和优先级。也许将�
 
 ### Volley架构
 
-![Volley架构图](https://github.com/MrTrying/android_Learning_Notes/blob/master/Volley/pic/Volley%E6%9E%B6%E6%9E%84%E5%9B%BE.png?raw=true)
+![Volley框架图](https://github.com/MrTrying/android-learning-notes/blob/master/_pic/Volley%E6%9E%B6%E6%9E%84%E5%9B%BE.png)
 
 由官方给出的 Volley 架构图可以看出，一个请求队列有三种线程，蓝色为 UI 线程（1个），绿色为 Cache 线程（1个），橙色为 Network 线程（默认4个）。
 
