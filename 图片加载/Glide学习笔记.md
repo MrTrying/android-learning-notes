@@ -387,10 +387,36 @@ Glide 的基础使用就讲解到这了。
 
     Glide.with(context)
         .load(mUrl)
-        .transform(new RoundTransformation(context , 20) ，  new GreyscaleTransformation(context))
+        .transform(new RoundTransformation(context , 20) ，  new RotateTransformation(context , 90f))
         .into(mImageView);
 
-这段代码中我们把一个图片切圆角，然后做了灰阶处理。
+这段代码中我们把一个图片切圆角，然后做了顺时针旋转90度处理。
+
+下面是旋转处理的代码
+
+	public class RotateTransformation extends BitmapTransformation {
+	
+	    private float rotateRotationAngle = 0f;
+	
+	    public RotateTransformation(Context context, float rotateRotationAngle) {
+	        super( context );
+	        this.rotateRotationAngle = rotateRotationAngle;
+	    }
+	
+	    @Override
+	    protected Bitmap transform(BitmapPool pool, Bitmap toTransform, int outWidth, int outHeight) {
+	        Matrix matrix = new Matrix();
+	
+	        matrix.postRotate(rotateRotationAngle);
+	
+	        return Bitmap.createBitmap(toTransform, 0, 0, toTransform.getWidth(), toTransform.getHeight(), matrix, true);
+	    }
+	
+	    @Override
+	    public String getId() {
+	        return getClass().getName() + Math.round(rotateRotationAngle);
+	    }
+	}
 
 > **注:这里需要注意一点 .centerCrop() 和 .fitCenter() 也都是 Transformation 所以也是遵循同时使用多个 Transformation 的规则的，即：当你使用了自定义转换后你就不能使用 .centerCrop() 或 .fitCenter() 了。**
 
