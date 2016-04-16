@@ -424,4 +424,51 @@ Glide 的基础使用就讲解到这了。
 [glide-transformations](https://github.com/wasabeef/glide-transformations "glide-transformations")
 这个库有两个不同的版本，扩展版本包含了更多的 Transformation ，它是通过设备的 GPU 来计算处理的，需要有额外的依赖，所以这两个版本的设置有一点不同。还是根据需要再决定使用那个版本吧！
 
+#### Animate篇 ####
+
+从图像到图像的平滑过渡是非常重要，Glide 中有一个标准动画去柔软的在你的 UI 中改变，但是我们现在希望设置自己的动画。
+
+	<set xmlns:android="http://schemas.android.com/apk/res/android"
+	    android:fillAfter="true">
+	
+	    <scale
+	        android:duration="@android:integer/config_longAnimTime"
+	        android:fromXScale="0.1"
+	        android:fromYScale="0.1"
+	        android:pivotX="50%"
+	        android:pivotY="50%"
+	        android:toXScale="1"
+	        android:toYScale="1"/>
+	</set>
+
+这是个 XML 动画缩放动画，图片刚开始小的，然后逐渐增大到原尺寸。我们现在要应用到 Glide 加载图片中去，调用 .animate() 方法传入 XML 动画的 id 即可。
+
+    Glide.with(context)
+        .load(mUrl)
+        .transform(new RoundTransformation(this , 20))
+        .animate( R.anim.zoom_in )
+        .into(mImageView);
+
+这种加载方式用在常规的 ImageView 上是没有问题的，但如果使用的 Target 是一些自定义的时候就没法好好的实现了。这时候我们就可以通过传入实现了 ViewPropertyAnimation.Animator 接口的类对象来实现。
+
+    ViewPropertyAnimation.Animator animator = new ViewPropertyAnimation.Animator() {
+        @Override
+        public void animate(View view) {
+            view.setAlpha( 0f );
+
+            ObjectAnimator fadeAnim = ObjectAnimator.ofFloat( view, "alpha", 0f, 1f );
+            fadeAnim.setDuration( 2500 );
+            fadeAnim.start();
+        }
+    };
+
+然后，我们只需要在 Glide 请求中设置这个动画对象就ok了
+
+    Glide.with(context)
+        .load(mUrl)
+        .animate( animator )
+        .into(viewTarget);
+
+
+
 ## 三、源码分析
