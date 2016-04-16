@@ -469,6 +469,7 @@ Glide 的基础使用就讲解到这了。
         .animate( animator )
         .into(viewTarget);
 
+在 animate(View view) 中你的动画对象方法中， 你可以做任何你想要对视图做的事情。自由的用你创建的动画吧。
 
 
 ## 三、源码分析
