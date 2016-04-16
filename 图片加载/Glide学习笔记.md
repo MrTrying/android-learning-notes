@@ -13,7 +13,7 @@ Glide滑行的意思，可以看出这个库的主旨就在于让图片加载变
 
 原文链接：[http://inthecheesefactory.com/blog/get-to-know-glide-recommended-by-google/en](http://inthecheesefactory.com/blog/get-to-know-glide-recommended-by-google/en "原文链接")
 
-译文链接：[http://blog.csdn.net/fancylovejava/article/details/44747759](http://blog.csdn.net/fancylovejava/article/details/44747759 "译文链接")
+译文链接：[http://jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0327/2650.html](http://jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0327/2650.html "译文链接")
 
 ## 二、使用
 
@@ -96,7 +96,7 @@ Glide 为缩略图提供了2种不同的加载方式，比较简单的方式是�
 			.into( imageView );
 	}
 
-与第一种方式不同的是，这里的第一个缩略图请求是完全独立于度二个原始请求的。该缩略图可以是不同的资源图片，同时也可以对缩略图做不同的转换，等等...
+与第一种方式不同的是，这里的第一个缩略图请求是完全独立于第二个原始请求的。该缩略图可以是不同的资源图片，同时也可以对缩略图做不同的转换，等等...
 
 #### 动画开关 ####
 
@@ -169,12 +169,12 @@ Glide 为缩略图提供了2种不同的加载方式，比较简单的方式是�
 	//设置 HIGH 优先级
 	Glide.with( context )
 		.load( highPriorityImageUrl )
-		.priority (Priority.High )
+		.priority (Priority.HIGH )
 		.into( imageView );
 	//设置 LOW 优先级
 	Glide.with( context )
 		.load( lowPriorityImageUrl )
-		.priority( Priority.High )
+		.priority( Priority.LOW )
 		.into( imageView );
 
 > - Priority.LOW
@@ -229,7 +229,9 @@ Glide 的基础使用就讲解到这了。
 到现在为止，我们所涉及到的代码都是直接加载图片到 ImageView 中。Glide 隐藏做了所有的网络请求和后台的线程处理，图片准备好之后切回到 UI 线程刷新 ImageView。也就是说 ImageView 在我们代码的链式结构中成为了最后一步，但是如果我们需要获取到 Bitmap 本身 
 的话我们就需要用到 Target 了。Target 其实就是整个图片的加载的生命周期，所以我们就可以通过它在图片加载完成之后获取到 Bitmap。
 
-> 其实对于 Target 可以简单的理解为回调，本身就是一个 interface，这里在后面会讲
+> 其实对于 Target 可以简单的理解为回调，本身就是一个 interface，Glide本身也为我们提供了很多 Target
+
+![所有Targets](https://github.com/MrTrying/android-learning-notes/blob/master/_pic/%E6%89%80%E6%9C%89Targets.png)
 
 ###### SimpleTarget ######
 
@@ -272,5 +274,128 @@ Glide 的基础使用就讲解到这了。
 ###### ViewTarget ######
 
 当我们使用 Custom View 时，Glide 并不支持加载图片到自定义 view 中的，使用 ViewTarget 更容易实现。
+	
+	public class CustomView extends FrameLayout {
+	    private ImageView mImageView;
+	
+	    public CustomView(Context context) {
+	        super(context);
+	    }
+	
+	    public CustomView(Context context, AttributeSet attrs) {
+	        super(context, attrs);
+	    }
+	
+	    public CustomView(Context context, AttributeSet attrs, int defStyleAttr) {
+	        super(context, attrs, defStyleAttr);
+	    }
+	
+	    @Override
+	    protected void onFinishInflate() {
+	        super.onFinishInflate();
+	        mImageView = new ImageView(getContext());
+	        addView(mImageView , LayoutParams.MATCH_PARENT , LayoutParams.MATCH_PARENT);
+	    }
+	
+	    public void setImage(Drawable drawable){
+	        mImageView.setImageDrawable(drawable);
+	    }
+	}
+
+上面这个例子就没有办法直接使用 .into() ，如果我们使用 ViewTarget 实现呢！
+
+    public void loadImageTarget(Context context){
+        CustomView mCustomView = (CustomView) findViewById(R.id.custom_view);
+
+        ViewTarget viewTarget = new ViewTarget<CustomView,GlideDrawable>( mCustomView ) {
+            @Override
+            public void onResourceReady(GlideDrawable resource, GlideAnimation<? super GlideDrawable> glideAnimation) {
+                this.view.setImage(resource);
+            }
+        };
+
+        Glide.with(context)
+                .load(mUrl)
+                .into(viewTarget);
+    }
+
+在 target 的 onResourceReady 回调方法中使用自定义 view 自己的方法去设置图片，可以看到在创建 ViewTarget 的时候传入了 CustomView 的对象。
+
+还有其他Target的使用这里就不一一讲述了，例如 AppWidgetTarget 、 NotificationTarget ...
+
+#### Transformations篇 ####
+
+图片显示之前我们可能还需要对图片进行处理操作，比如：图片切圆角，灰阶处理等等；这些需求我们通过 Transformations 操作 bitmap 来实现，我们可以修改图片的任意属性：尺寸，范围，颜色，像素位置等等。其实我们之前已经提到过两个 Transformation 了，即 fitCenter 和 centerCrop ，这两个是 Glide 已经实现的。
+
+接下来就要讲讲怎么样来实现自己的 Transformation ，我们需要创建一个类去实现 Transformation 接口，但是要实现这个方法还是比较复杂的，接口中 transform 方法提供的参数 Resource<T> resource 不是那么好处理的。如果你只是想要对图片（不是 Gif 和 video）做常规的 bitmap 转换，我们推荐你使用抽象类 BitmapTransformation。它简化了很多的实现，这应该能覆盖 95% 的应用场景啦。 
+
+下面的代码实现了对图片切圆角的操作，其中 getId() 方法描述了这个 Transformation 的唯一标识，为避免意外我们需要确保它是唯一的。
+
+	public class RoundTransformation extends BitmapTransformation {
+		private float radius = 0f;
+	
+		public RoundTransformation(Context context) {
+			this(context, 4);
+		}
+	
+		public RoundTransformation(Context context, int px) {
+			super(context);
+			this.radius = px;
+		}
+	
+		@Override
+		protected Bitmap transform(BitmapPool pool, Bitmap toTransform, int outWidth, int outHeight) {
+			return roundCrop(pool, toTransform);
+		}
+	
+		private Bitmap roundCrop(BitmapPool pool, Bitmap source) {
+			if (source == null)
+				return null;
+	
+			Bitmap result = pool.get(source.getWidth(), source.getHeight(), Bitmap.Config.ARGB_8888);
+			if (result == null) {
+				result = Bitmap.createBitmap(source.getWidth(), source.getHeight(), Bitmap.Config.ARGB_8888);
+			}
+	
+			Canvas canvas = new Canvas(result);
+			Paint paint = new Paint();
+			paint.setShader(new BitmapShader(source, BitmapShader.TileMode.CLAMP, BitmapShader.TileMode.CLAMP));
+			paint.setAntiAlias(true);
+			RectF rectF = new RectF(0f, 0f, source.getWidth(), source.getHeight());
+			canvas.drawRoundRect(rectF, radius, radius, paint);
+			return result;
+		}
+	
+		@Override
+		public String getId() {
+			return getClass().getName() + Math.round(radius);
+		}
+	
+	}
+
+现在我们有了自己的 Transformation 就可以来看看怎么使用了。
+
+调用 .transform() 方法，将自定义的 Transformation 的对象作为参数传递进去就可以使用你的 Transformation 了，这里也可以使用 .bitmaoTransform() 但是它只能用于 bitmap 的转换。
+
+    Glide.with(context)
+        .load(mUrl)
+        .transform(new RoundTransformation(context , 20))
+		//.bitmapTransform( new RoundTransformation(context , 20) )
+        .into(mImageView);
+
+如果我们需要同时执行多个 Transformation 的话，我们不能使用链式的形式多次调用 .transform() 或 .bitmapTransform() 方法，即使你调用了，之前的配置就会被覆盖掉！我们可以直接传递多个转换对象给 .transform() 或 .bitmapTransform() 。
+
+    Glide.with(context)
+        .load(mUrl)
+        .transform(new RoundTransformation(context , 20) ，  new GreyscaleTransformation(context))
+        .into(mImageView);
+
+这段代码中我们把一个图片切圆角，然后做了灰阶处理。
+
+> **注:这里需要注意一点 .centerCrop() 和 .fitCenter() 也都是 Transformation 所以也是遵循同时使用多个 Transformation 的规则的，即：当你使用了自定义转换后你就不能使用 .centerCrop() 或 .fitCenter() 了。**
+
+这里有一个 GLide Transformations 的库，它提供了很多 Transformation 的实现，非常值得去看，不必重复造轮子对吧！
+[glide-transformations](https://github.com/wasabeef/glide-transformations "glide-transformations")
+这个库有两个不同的版本，扩展版本包含了更多的 Transformation ，它是通过设备的 GPU 来计算处理的，需要有额外的依赖，所以这两个版本的设置有一点不同。还是根据需要再决定使用那个版本吧！
 
 ## 三、源码分析
