@@ -471,5 +471,59 @@ Glide 的基础使用就讲解到这了。
 
 在 animate(View view) 中你的动画对象方法中， 你可以做任何你想要对视图做的事情。自由的用你创建的动画吧。
 
+#### Modules篇 ####
+
+Glide 的 Module 是一个可以全局改变 Glide 的行为的东西，为了定制 Glide 的行为我们要去实现 interface GlideModule 来写我们自己的代码。
+	
+	public class ExampleModule implements GlideModule{
+	    @Override
+	    public void applyOptions(Context context, GlideBuilder builder) {
+	        // todo
+	    }
+	
+	    @Override
+	    public void registerComponents(Context context, Glide glide) {
+			// todo
+	    }
+	}
+
+可以看到 GlideModule 为我们提供了两个方法，这里我们主要使用的是 applyOptions(Context context, GlideBuilder builder) ， 我们自己的需要重新定义的代码写在该方法里就可以了。然后我们还需要去 AndroidManifest.xml 中使用 meta 声明我们上面实现的 Module
+
+	<?xml version="1.0" encoding="utf-8"?>
+	<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+	    package="com.mrtrying.demoglide">
+	
+	    <application>
+	
+	        <meta-data
+	            android:name="com.mrtrying.demoglide.module.ExampleModule"
+	            android:value="GlideModule" />
+
+			...
+
+	    </application>
+
+		...
+	
+	</manifest>
+
+到这里我们就完成了 ExampleModule 的声明，Glide 将会在工作是使用我们所定义的 Module
+
+> TIPS
+> 
+> - 我们需要将 android:name 属性改成 包名+类名 的形式，这样的引用才是正确的。如果你想删掉 Glide Module，只需要删除在 AndroidManifest.xml 中的声明就可以了。Java 类可以保存，说不定以后会用呢。如果它没有在 AndroidManifest.xml 中被引用，那它不会被加载或被使用。
+>
+> - 定制 module 的话 Glide 会有这样一个优点：你可以同时声明多个 Glide module。Glide 将会（没有特定顺序）得到所有的声明 module。因为你当前不能定义顺序，请确保定制不会引起冲突！
+
+这个过程走通了，接下来我们来看看是怎么自定义的。applyOptions(Context context, GlideBuilder builder) 中有两个参数， 我们通过使用 GlideBuilder 来实现我们的需求。先看看 GlideBuilder 中可用的方法
+
+ - .setMemoryCache(MemoryCache memoryCache)
+ - .setBitmapPool(BitmapPool bitmapPool)
+ - .setDiskCache(DiskCache.Factory diskCacheFactory)
+ - .setDiskCacheService(ExecutorService service)
+ - .setResizeService(ExecutorService service)
+ - .setDecodeFormat(DecodeFormat decodeFormat)
+
+可以看到，这个 GlideBuilder 对象给你访问了 Glide 重要的核心组件。接下来我们就要试着去使用这些方法
 
 ## 三、源码分析
