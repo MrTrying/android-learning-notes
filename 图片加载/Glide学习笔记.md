@@ -526,4 +526,22 @@ Glide 的 Module 是一个可以全局改变 Glide 的行为的东西，为了�
 
 可以看到，这个 GlideBuilder 对象给你访问了 Glide 重要的核心组件。接下来我们就要试着去使用这些方法
 
+###### 增加 Glide 的图片质量 ######
+
+在 Android 中有两个主要的方法对图片进行解码：ARGB_8888 和 RGB_565 。前者为每个像素使用4个字节，后者每个像素仅使用2个字节。ARGB_8888 的有时就是图像质量更高以及能储存一个 alpha 通道。 Picasso 使用的就是 ARGB_8888 ， Glide 默认使用低质量的 RGB_565 ，但是现在你就可以使用 Glide module 来改变图片解码规则。就象这样
+
+	public class QualityModule implements GlideModule{
+		@Override
+		public void applyOptions(Context context , GlideBuilder builder){
+			builder.setDecodeFormat(DecodeFormat.PREFER_ARGB_8888);
+		}
+
+		@Override
+		public void registerComponents(Context context , Glide glide){
+			// nothing to do here
+		}
+	}
+
+这样我们就简单的增加了 Glide 的图片质量。
+
 ## 三、源码分析
