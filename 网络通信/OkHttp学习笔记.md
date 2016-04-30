@@ -33,64 +33,8 @@ GRADLE
 
 ### (一) Http Get
 
-网络请求中 Get 请求最常见了,话不多说,上代码
 
-	// 创建okhttpClient对象
-	OkHttpClient mOkHttpClient = new OkHttpClient();
-	// 创建一个Request
-	final Request request = new Request.Builder()
-			.url("https://github.com/MrTrying")
-			.build();
-	// 创建 call
-	Call call = mOkHttpClient.newCall(request);
-	
-	call.enqueue(new Callback() {
-		
-		@Override
-		public void onResponse(final Response response) throws IOException {
-			// 请求成功处理
-			// final String text = response.body().string();
-			
-		}
-		
-		@Override
-		public void onFailure(Request request, IOException e) {
-			// 请求失败处理
-			
-		}
-	});
 
-这就是发送一个 Get 请求的步骤,创建一个 Request 对象,参数至少需要 Url ,如果需要设置更多的参数,可以通过Request.Builder设置更多的参数比如:header、method等。然后通过Request的对象去构造一个Call对象，最后调用call.enqueue，将call加入调度队列，然后等待执行任务完成，回调我们的Callback。
-
-> **注：**
-> 
-> - Call.enqueue需要设置回调，则是异步请求；如果需要同步请求可以使用Call.execute()方法，返回一个Response对象，cancel()方法取消一个请求。
-> - onResponse的回调参数是response，我们可以通过response.body().string()获取返回的字符串，或者通过response.body().bytes()获取二进制字节数组，或者通过response.body().byteStream()获取inputstream，这里支持大文件下载我们可以通过IO写文件，不过也说明onResponse执行线程不是UI线程，如果需要操作控件，需要handler配合。
-
-### (二) Http Post
-
-Post请求和Get请求的使用基本一致，只是在Request的构造的时候有些不同；需要使用 FormEncodeBuilder 携带键值对参数
-
-	OkHttpClient mOkHttpClient = new OkHttpClient();
-	FormEncodingBuilder params = new FormEncodingBuilder();
-	params.add("ket", "value");
-	Request request = new Request.Builder()
-			.url(url)
-			.post(params.build())
-			.build();
-	Call call = mOkHttpClient.newCall(request);
-	call.enqueue(new Callback() {
-		
-		@Override
-		public void onResponse(Response arg0) throws IOException {
-			
-		}
-		
-		@Override
-		public void onFailure(Request arg0, IOException arg1) {
-			
-		}
-	});
 
 ### (三) 基于Http上传文件
 
