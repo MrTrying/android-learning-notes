@@ -231,7 +231,7 @@ Glide 的基础使用就讲解到这了。
 
 > 其实对于 Target 可以简单的理解为回调，本身就是一个 interface，Glide本身也为我们提供了很多 Target
 
-![所有Targets](https://github.com/MrTrying/android-learning-notes/blob/master/_pic/%E6%89%80%E6%9C%89Targets.png)
+![所有Targets](https://raw.githubusercontent.com/MrTrying/android-learning-notes/master/_pic/%E6%89%80%E6%9C%89Targets.png)
 
 ###### SimpleTarget ######
 
