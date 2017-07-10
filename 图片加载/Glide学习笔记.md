@@ -559,4 +559,4 @@ Glide 的 Module 是一个可以全局改变 Glide 的行为的东西，为了�
 		compile 'com.squareup.okhttp:okhttp:3.2.0'
 	}
 
-Gradle 会自动合并冰妖的 GlideModule 到你的 AndroidManifest.xml ， Glide 会认可在 manifest 中存在，然后使用 OkHttp 做到的所有网络连接。
+Gradle 会自动合并必要的 GlideModule 到你的 AndroidManifest.xml ， Glide 会认可在 manifest 中存在，然后使用 OkHttp 做到的所有网络连接。
