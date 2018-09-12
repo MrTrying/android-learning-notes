@@ -1,4 +1,4 @@
-##1.单一职责原则（Single Responsibility Principle，缩写SRP）
+## 1.单一职责原则（Single Responsibility Principle，缩写SRP）
 	
 单一职责原则，就一个类而言，应该只有一个引起它变化的原因。简单说，一个类应该是一组高度相关的函数、数据的封装；也就是高内聚。
 
@@ -82,7 +82,7 @@ public class ImageCache {
 ```
 如何划分一个类、一个函数的职责，每个人都有自己的看法，这需要根据个人经验、具体的业务逻辑而定。
 
-##2.开闭原则（Open Close Principle，缩写OCP）
+## 2.开闭原则（Open Close Principle，缩写OCP）
 开闭原则是Java中最基础的设计原则，知道我们如何建立一个稳定的、灵活的系统。定义：软件中得对象应该对于扩展是开放的，但是对于修改是封闭的。
 
 ![](https://upload-images.jianshu.io/upload_images/595349-f88066af78b82bbd.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
@@ -93,7 +93,7 @@ public class ImageCache {
 
 开发过程中都没有name理想的状况，因此，凡事也是需要结合具体情况在做决定，目的是更稳定、更灵活同时保有原有的正确性。
 
-##3.里氏替换原则（Liskov Substitution Principle，缩写LSP）
+## 3.里氏替换原则（Liskov Substitution Principle，缩写LSP）
 里氏替换原则，书上原话的定义简直看不得（解释的辣眼睛，完全看不懂），简单地说就是所有引用基类的地方必须能透明地使用其子类的对象。只要父类能出现的地方子类就可以出现，而且替换为子类也不会产生任何错误或异常，使用者可能根本就不需要知道是父类还是子类。但是，反过来就不行了，有子类出现的地方，父类未必就能适应。其实就是：抽象。 
 
 ![](https://upload-images.jianshu.io/upload_images/595349-b4ac20004a407717.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
@@ -115,7 +115,7 @@ public class ImageCache {
 
 事物总是具有两面性，如何权衡利与弊都是需要根据具体场景来做出选择并加以处理。
 
-##4.依赖倒置原则（Dependence Inversion Principle，缩写DIP）
+## 4.依赖倒置原则（Dependence Inversion Principle，缩写DIP）
 
 依赖倒置原则，说的就是一种特定的就形式，使得高层次的模块不依赖于低层次的模块的实现细节的目的，依赖模块被颠倒了。依赖倒置原则的几个关键点：
 
@@ -131,13 +131,13 @@ public class ImageCache {
 
 依然可以使用这张图来表示，表达出来就是`ImageLoader`和`MemonyCache`等并没有直接关系，甚至`ImageLoader`只需要实现`ImageCache`类或继承其他已有的`ImageCache`子类完成相应的缓存功能，然后将具体的实现注入到`ImageLoader`即可实现缓存功能的替换。这也是依赖倒置原则的体现。
 
-##5.接口隔离原则（Interface Segregation Principle，缩写ISP）
+## 5.接口隔离原则（Interface Segregation Principle，缩写ISP）
 
 接口隔离原则将非常庞大、臃肿的接口拆分成为更小的和更具体的接口；目的就是解耦。这个原则的做法和单一职责原则有点相似，就是说接口中得方法保持更高的相关性、尽量少，避免掉不需要的方法。
 
 举个栗子，现在有一个带有呼吸方法的接口，还有一个打鼾方法的接口；如果说，你把这两个方法放大哦一个接口中，基本就是违背接口隔离原则，毕竟呼吸和打鼾没有什么紧密的相关性；不可能说我需要呼吸的时候一定需要打鼾吧！
 
-##6.迪米特原则（Law of Principle，缩写LOP）
+## 6.迪米特原则（Law of Principle，缩写LOP）
 
 迪米特原则也称为最少知识原则（Least Knowledge Principle），定义：一个对象应该对其他对象有最少的了解。通俗地讲，一个类要对自己需要调用的类知道得最少，类的内部如何实现、如何复杂都与调用者（或依赖者）没关系，调用者（或依赖者）只需要知道他需要的方法即可，其他的不需要关心。类与类之间的关系越密切，耦合度越大；当一个类发生改变时，对另一个类的影响也越大。
 
